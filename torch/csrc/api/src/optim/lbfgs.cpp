@@ -347,12 +347,38 @@ static std::tuple<double, Tensor, double, int64_t> _strong_wolfe(
     //   + `t` is at one of the boundary,
     // we will move `t` to a position which is `0.1 * len(bracket)`
     // away from the nearest boundary point.
+
+    // (bracket_min)-----------------(t)-----(bracket_max)
+    //
+    //
     double bracket_max = std::max(bracket[0], bracket[1]);
     auto bracket_min = std::min(bracket[0], bracket[1]);
+    auto len_bracket = bracket_max - bracket_min;
+    auto eps = 0.1 * len_bracket;
+
+    auto dist_to_left = std::abs(t - bracket_min);
+    auto dist_to_right = std::abs(t - bracket_max);
+    auto min_dist_to_boundary = std::min(dist_to_left, dist_to_right);
+    auto out_of_bounds  = (t >= bracket_max) || (t <= bracket_min);
+
+    // t is within eps of left or right bracket (can be out of bounds???, not checked in current prod code)
+    if (min_dist_to_boundary < eps) {
+        // insufficient progress or t is out of bounds
+        if (insuf_progress || out_of_bounds) {
+            // update t to be exactly eps away from closest bracket, within bounds
+            t = dist_to_right < dist_to_left ? bracket_max - eps : bracket_min + eps
+            insuf_progress = false;
+        } else {
+            insuf_progress = true;
+        }
+    } else {
+        insuf_progress = false;
+    }
+
     auto eps = 0.1 *
         (bracket_max -
          bracket_min); // // NOLINT(cppcoreguidelines-avoid-magic-numbers)
-    if (std::min(bracket_max - t, t - bracket_min) < eps) {
+    if (std::min(bracket_max - t, t - bracket_min) < eps) { // this checks either close to boundary (within eps), or is outside boundary (regardless of distance)
       // interpolation close to boundary
       if (insuf_progress || (t >= bracket_max) || (t <= bracket_min)) {
         // evaluate at 0.1 away from boundary
@@ -375,7 +401,6 @@ static std::tuple<double, Tensor, double, int64_t> _strong_wolfe(
 
     if ((f_new > (f + c1 * t * val(gtd))) || (f_new >= bracket_f[low_pos])) {
       // Armijo condition not satisfied or not lower than lowest point
-      // # Armijo condition not satisfied or not lower than lowest point
       bracket[high_pos] = t;
       bracket_f[high_pos] = f_new;
       bracket_g[high_pos] = g_new.clone(at::MemoryFormat::Contiguous);
