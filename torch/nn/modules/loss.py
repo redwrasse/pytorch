@@ -2015,10 +2015,8 @@ class CTCLoss(_Loss):
         input_lengths: Tensor,
         target_lengths: Tensor,
     ) -> Tensor:
-        # Use a 'pull-back' to support unnormalized inputs. This works since log_softmax is idempotent.
-        # See https://github.com/pytorch/pytorch/issues/52241
-        torch_ctc = lambda x, *o: F.ctc_loss(F.log_softmax(x, -1), *o)
-        return torch_ctc(
+
+        return F.ctc_loss(
             inputs,
             targets,
             input_lengths,
@@ -2027,16 +2025,6 @@ class CTCLoss(_Loss):
             self.reduction,
             self.zero_infinity,
         )
-        #
-        # return F.ctc_loss(
-        #     inputs,
-        #     targets,
-        #     input_lengths,
-        #     target_lengths,
-        #     self.blank,
-        #     self.reduction,
-        #     self.zero_infinity,
-        # )
 
 
 # TODO: L1HingeEmbeddingCriterion
