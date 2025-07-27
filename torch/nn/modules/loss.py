@@ -2015,7 +2015,6 @@ class CTCLoss(_Loss):
         input_lengths: Tensor,
         target_lengths: Tensor,
     ) -> Tensor:
-
         return F.ctc_loss(
             inputs,
             targets,
