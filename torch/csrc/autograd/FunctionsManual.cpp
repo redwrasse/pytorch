@@ -3688,23 +3688,26 @@ Tensor svd_backward(
   Tensor gA = [&] {
     // ret holds everything but the diagonal of gA
     auto ret = [&] {
-      const auto E = [&S] {
+      // E as an outer product from S is only used for element-wise division, so
+      // materialize elements as needed.
+      const auto div_E = [&S](const Tensor& numerator) {
         const auto S2 = S * S;
-        auto ret = S2.unsqueeze(-2) - S2.unsqueeze(-1);
-        // Any number a != 0 would, as we are just going to use it to compute 0
-        // / a later on
-        ret.diagonal(0, -2, -1).fill_(1);
-        return ret;
-      }();
+        const auto k = S.size(-1);
+        const auto eye = at::eye(k, numerator.options()).expand_as(numerator);
+        const auto off_diag_mask = 1 - eye;
+        const auto E_off_diag =
+            (S2.unsqueeze(-2) - S2.unsqueeze(-1)) * off_diag_mask + eye;
+        return numerator / E_off_diag;
+      };
 
       if (gU.defined()) {
         if (gVh.defined()) {
-          return (UhgU * S.unsqueeze(-2) + S.unsqueeze(-1) * VhgV) / E;
+          return div_E(UhgU * S.unsqueeze(-2) + S.unsqueeze(-1) * VhgV);
         } else {
-          return (UhgU / E) * S.unsqueeze(-2);
+          return div_E(UhgU) * S.unsqueeze(-2);
         }
       } else { // gVh.defined();
-        return S.unsqueeze(-1) * (VhgV / E);
+        return S.unsqueeze(-1) * div_E(VhgV);
       }
     }();
     // Fill the diagonal
