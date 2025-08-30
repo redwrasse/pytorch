@@ -1722,13 +1722,32 @@ def _adjusted_atol(atol, u, v):
     # q2 = v^T B u, we must allow |q1 - q2| < v^T E u + rtol * v^T B u, where E is
     # the correctly sized matrix in which each entry is atol.
     #
-    # We see that atol needs to be scaled by v^T M u (where M is an all-ones M x N
-    # matrix): v^T M u = \sum_{i} \sum_{j} u_i * v_j = (\sum_{i} u_i)(\sum_{i} v_i)
-    # TODO: properly handle case when u is tuple instead of only taking first element
-    u = u[0] if isinstance(u, tuple) else u
-    sum_u = u.sum()
-    sum_v = 1.0 if v is None else v.sum()
-    return atol * float(sum_u) * float(sum_v)
+    # The mathematically rigorous bound is: |q1 - q2| <= atol * (sum_i |v_i|) * (sum_j |u_j|)
+    # This accounts for the worst-case accumulation of errors in the scalar products.
+    # For complex tensors, we handle real and imaginary parts separately as tuples (ur, ui).
+    
+    def _sum_abs_tensor_or_tuple(tensor_or_tuple):
+        """Compute sum of absolute values for real tensor or complex (real, imag) tuple"""
+        if isinstance(tensor_or_tuple, tuple):
+            # Complex case: tensor_or_tuple = (real_part, imag_part)
+            real_part, imag_part = tensor_or_tuple
+            # For complex z = a + bi, |z| = sqrt(a^2 + b^2), so sum(|z_i|) = sum(sqrt(a_i^2 + b_i^2))
+            return torch.sqrt(real_part**2 + imag_part**2).sum()
+        else:
+            # Real case: simple sum of absolute values
+            return tensor_or_tuple.abs().sum()
+    
+    # Handle u (input perturbation vector)
+    sum_abs_u = _sum_abs_tensor_or_tuple(u)
+    
+    # Handle v (output gradient vector, None for forward mode)
+    if v is None:
+        # Forward mode: no v vector needed, so sum_abs_v = 1.0
+        sum_abs_v = 1.0
+    else:
+        sum_abs_v = _sum_abs_tensor_or_tuple(v)
+    
+    return atol * float(sum_abs_u) * float(sum_abs_v)
 
 
 FAST_FAIL_SLOW_OK_MSG = """
