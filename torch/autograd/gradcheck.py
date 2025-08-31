@@ -1719,13 +1719,16 @@ def _get_inp_tensors(tupled_inputs):
 def _adjusted_atol(atol, u, v):
     # In slow gradcheck, we compare A and B element-wise, i.e., for some a, b we
     # allow: |a - b| < atol + rtol * b. But since we now compare q1 = v^T A u and
-    # q2 = v^T B u, we must allow |q1 - q2| < v^T E u + rtol * v^T B u, where E is
-    # the correctly sized matrix in which each entry is atol.
-    #
-    # The mathematically rigorous bound is: |q1 - q2| <= atol * (sum_i |v_i|) * (sum_j |u_j|)
-    # This accounts for the worst-case accumulation of errors in the scalar products.
+    # q2 = v^T B u, we must allow |q1 - q2| < atol * (sum_i |v_i|) * (sum_j |u_j|) + rtol * q2.
+
+    # u inputs are drawn from [0, 1), so it's ok to replace |u_i| with u_i. Same for v_i (non-negative)?
+
     # For complex tensors, we handle real and imaginary parts separately as tuples (ur, ui).
-    
+    # real and imag. likley both draw from [0, 1).
+    # |u| -> sqrt(ur^2 + ui^2), so need to do sum_i sqrt(ur^2 + ui^2), eg. as below.
+    # But of course TODO figure out projection for conjugate wirtinger derivative.
+    # perhaps it's just as is, since v^T(j_n - j_a) u =
+
     def _sum_abs_tensor_or_tuple(tensor_or_tuple):
         """Compute sum of absolute values for real tensor or complex (real, imag) tuple"""
         if isinstance(tensor_or_tuple, tuple):
@@ -1735,7 +1738,8 @@ def _adjusted_atol(atol, u, v):
             return torch.sqrt(real_part**2 + imag_part**2).sum()
         else:
             # Real case: simple sum of absolute values
-            return tensor_or_tuple.abs().sum()
+            return tensor_or_tuple.abs().sum() # FIXME don't need to bother with abs() since u drawn from [0, 1), but couldd
+        # do so for piece of mind. or maybe add an assert as input validation in function?
     
     # Handle u (input perturbation vector)
     sum_abs_u = _sum_abs_tensor_or_tuple(u)
