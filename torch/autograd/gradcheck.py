@@ -799,7 +799,7 @@ def _check_analytical_jacobian_attributes(
         vjps2 = _compute_analytical_jacobian_rows(vjp_fn, output.clone())
 
     output_numel = output.numel() if not fast_mode else 1
-    jacobians1, types_ok, sizes_ok = _stack_and_check_tensors(
+    jacobians1, sizes_ok, types_ok = _stack_and_check_tensors(
         vjps1, inputs, output_numel
     )
     jacobians2, _, _ = _stack_and_check_tensors(vjps2, inputs, output_numel)
@@ -878,7 +878,7 @@ def get_analytical_jacobian(inputs, output, nondet_tol=0.0, grad_out=1.0):
     vjps2 = _compute_analytical_jacobian_rows(vjp_fn, output.clone())
 
     output_numel = output.numel()
-    jacobians1, types_ok, sizes_ok = _stack_and_check_tensors(
+    jacobians1, sizes_ok, types_ok = _stack_and_check_tensors(
         vjps1, inputs, output_numel
     )
     jacobians2, _, _ = _stack_and_check_tensors(vjps2, inputs, output_numel)
