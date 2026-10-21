@@ -6787,6 +6787,43 @@ Done""",
         x = torch.randn(2, dtype=torch.double, requires_grad=True)
         self.assertTrue(gradcheck(fn, (x,), fast_mode=True))
 
+    def test_gradcheck_non_differentiable_outputs_before_differentiable(self):
+        from torch.autograd.gradcheck import GradcheckError
+
+        class WrongGrad(Function):
+            @staticmethod
+            def forward(ctx, x):
+                return x * 2
+
+            @staticmethod
+            def backward(ctx, gO):
+                return gO * 5
+
+            @staticmethod
+            def jvp(ctx, gI):
+                return gI * 5
+
+        def int_first(f):
+            return lambda x: ((x > 0).long(), torch.arange(3), f(x))
+
+        def constant_first(f):
+            return lambda x: (torch.ones(3, dtype=torch.double), f(x))
+
+        x = torch.randn(2, dtype=torch.double, requires_grad=True)
+        for make_fn, fast_mode, use_forward_ad in product(
+            (int_first, constant_first), (True, False), (True, False)
+        ):
+            kwargs = dict(
+                fast_mode=fast_mode,
+                check_forward_ad=use_forward_ad,
+                check_backward_ad=not use_forward_ad,
+                check_undefined_grad=False,
+                check_batched_grad=False,
+            )
+            self.assertTrue(gradcheck(make_fn(lambda x: x * 2), (x,), **kwargs))
+            with self.assertRaisesRegex(GradcheckError, "Jacobian"):
+                gradcheck(make_fn(WrongGrad.apply), (x,), **kwargs)
+
     @parametrize(
         "layout",
         (

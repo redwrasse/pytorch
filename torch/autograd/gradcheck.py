@@ -430,7 +430,11 @@ def _combine_jacobian_cols(
     jacobians = _allocate_jacobians_with_outputs(
         outputs, numel, dtype=input.dtype if input.dtype.is_complex else None
     )
-    for i, jacobian in enumerate(jacobians):
+    # jacobians only covers float/complex outputs, but the columns cover all outputs
+    float_output_indices = [
+        i for i, o in enumerate(outputs) if _is_float_or_complex_tensor(o)
+    ]
+    for i, jacobian in zip(float_output_indices, jacobians):
         for k, v in jacobians_cols.items():
             jacobian[k] = v[i]
     return jacobians
@@ -1632,11 +1636,16 @@ def _slow_gradcheck(
     # Note: [numerical vs analytical output length]
     # The numerical path returns jacobian quantity for all outputs, even if requires_grad of that
     # output is False. This behavior is necessary for _check_no_differentiable_outputs to work.
-    numerical = [nj for o, nj in zip(func_out, numerical) if o.requires_grad]
+    # Both the numerical and forward AD jacobians only cover float/complex outputs.
+    float_outputs = [o for o in func_out if _is_float_or_complex_tensor(o)]
+    numerical = [nj for o, nj in zip(float_outputs, numerical) if o.requires_grad]
     if use_forward_ad:
-        analytical_forward = _get_analytical_jacobian_forward_ad(
-            func, tupled_inputs, func_out, check_grad_dtypes=check_grad_dtypes
-        )
+        analytical_forward = [
+            [a for o, a in zip(float_outputs, a_per_input) if o.requires_grad]
+            for a_per_input in _get_analytical_jacobian_forward_ad(
+                func, tupled_inputs, func_out, check_grad_dtypes=check_grad_dtypes
+            )
+        ]
 
         for i, n_per_out in enumerate(numerical):
             for j, n in enumerate(n_per_out):
@@ -1823,8 +1832,13 @@ def _run_slow_mode_and_get_error(
             new_fn, (input_to_check,), (output_to_check,)
         )[0][0]
     else:
+        # output_idx indexes the differentiable outputs only
         slow_numerical = _get_numerical_jacobian(
-            func, tupled_inputs, outputs, eps=eps, is_forward_ad=False
+            lambda *inps: _differentiable_outputs(func(*inps)),
+            tupled_inputs,
+            outputs,
+            eps=eps,
+            is_forward_ad=False,
         )[input_idx][output_idx]
         slow_analytical = _get_analytical_jacobian(
             tupled_inputs, outputs, input_idx, output_idx
