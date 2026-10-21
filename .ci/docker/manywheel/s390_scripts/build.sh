@@ -49,7 +49,8 @@ PY312_BIN=/opt/python/cp312-cp312/bin
 #   (https://github.com/pypa/manylinux/issues/53)
 # And it's not clear how up-to-date that is anyway
 # So let's just use the same one pip and everyone uses
-$PY312_BIN/pip install certifi
+# certifi>=2026.10.19 drops roots that trust the compromised eMudhra intermediates
+$PY312_BIN/pip install "certifi>=2026.10.19"
 ln -s $($PY312_BIN/python -c 'import certifi; print(certifi.where())') \
       /opt/_internal/certs.pem
 # If you modify this line you also have to modify the versions in the
